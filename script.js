@@ -1,19 +1,34 @@
-'use strict';
-// Supabase 이전용 샘플 상품 데이터: 실제 상품 사진 대신 프로젝트 내 SVG 일러스트를 사용합니다.
-const products = [
-{id:1,name:'딸기 하트 젤리',price:3900,category:'과일젤리',stock:24,description:'상큼한 딸기향과 말랑한 하트 모양의 만남',image:'./img/strawberry.svg'},
-{id:2,name:'망고 큐브 젤리',price:4500,category:'과일젤리',stock:18,description:'열대 망고의 달콤함을 담은 큐브 젤리',image:'./img/mango.svg'},
-{id:3,name:'레몬 사워 링',price:3200,category:'사워젤리',stock:35,description:'입안이 찌릿한 레몬맛 사워 링',image:'./img/lemon.svg'},
-{id:4,name:'콜라 사워 보틀',price:3500,category:'사워젤리',stock:29,description:'새콤달콤한 콜라병 모양 젤리',image:'./img/cola.svg'},
-{id:5,name:'무지개 곰 구미',price:4900,category:'구미젤리',stock:21,description:'알록달록 과일향 곰돌이 구미',image:'./img/bear.svg'},
-{id:6,name:'복숭아 구미',price:4200,category:'구미젤리',stock:16,description:'향긋한 복숭아 풍미와 쫀득한 식감',image:'./img/peach.svg'},
-{id:7,name:'독일 과일 믹스',price:5900,category:'수입젤리',stock:12,description:'다양한 과일 맛을 모은 수입 스타일 믹스',image:'./img/mix.svg'},
-{id:8,name:'일본 포도 젤리',price:6500,category:'수입젤리',stock:15,description:'진한 포도향을 즐기는 프리미엄 젤리',image:'./img/grape.svg'},
-{id:9,name:'수박 슬라이스',price:3800,category:'과일젤리',stock:30,description:'시원한 수박향의 여름 간식',image:'./img/watermelon.svg'},
-{id:10,name:'블루베리 사워',price:4100,category:'사워젤리',stock:23,description:'새콤한 블루베리 코팅 젤리',image:'./img/blueberry.svg'},
-{id:11,name:'미니 공룡 구미',price:4700,category:'구미젤리',stock:17,description:'귀여운 공룡 모양의 탱글한 구미',image:'./img/dino.svg'},
-{id:12,name:'트로피컬 수입 믹스',price:6900,category:'수입젤리',stock:11,description:'이국적인 열대과일 풍미의 모둠 젤리',image:'./img/tropical.svg'}
-];
+﻿'use strict';
+// Supabase shop_products 테이블에서 상품을 직접 불러옵니다.
+const SUPABASE_URL = 'https://lsnizzjkdfyvpowxykcz.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_yACjMqr_Eszu3cM9BDaKTw_dV3XxcqZ';
+let products = [];
+let productsLoading = true;
+let productsError = '';
+async function loadProducts() {
+  productsLoading = true;
+  productsError = '';
+  render();
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/shop_products?select=*&is_active=eq.true&order=id.asc`, {
+      headers: { apikey: SUPABASE_PUBLISHABLE_KEY }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    const rows = await response.json();
+    if (!Array.isArray(rows)) throw new Error('상품 응답 형식이 올바르지 않습니다.');
+    products = rows.map(p => ({
+      id: Number(p.id), name: String(p.name || ''), price: Number(p.price),
+      category: String(p.category || ''), stock: Number(p.stock),
+      description: String(p.description || ''), image: String(p.image_url || '')
+    }));
+  } catch (error) {
+    console.error('Supabase 상품 조회 실패:', error);
+    productsError = 'Supabase에서 상품을 불러오지 못했습니다. 브라우저 개발자 도구의 오류를 확인해 주세요.';
+  } finally {
+    productsLoading = false;
+    render();
+  }
+}
 // 구매 누적액 기준: 브론즈 0원, 실버 3만원, 골드 10만원, VIP 30만원.
 const membershipGrades=[{name:'브론즈',minSpent:0,rate:.01},{name:'실버',minSpent:30000,rate:.03},{name:'골드',minSpent:100000,rate:.05},{name:'VIP',minSpent:300000,rate:.07}];
 const K={users:'rp_users_v1',session:'rp_session_v1',carts:'rp_carts_v1',orders:'rp_orders_v1'};
@@ -32,7 +47,7 @@ function toast(message){const el=document.getElementById('toast');el.textContent
 function header(){const u=getUser();document.getElementById('authActions').innerHTML=u?`<button data-view="mypage">${esc(u.nickname)}님</button><button data-action="logout">로그아웃</button>`:'<button data-view="login">로그인</button><button data-view="signup">회원가입</button>';document.getElementById('cartCount').textContent=getCart().reduce((s,i)=>s+i.qty,0)}
 function navigate(next){view=next;render();window.scrollTo({top:0,behavior:'instant'})}
 function card(p){return `<article class="product"><img src="${p.image}" alt="${esc(p.name)} 일러스트" loading="lazy"><span class="chip">${p.category}</span><h3>${esc(p.name)}</h3><p>${esc(p.description)}</p><div class="price">${money(p.price)}</div><small class="muted">재고 ${p.stock}개</small><div class="actions"><button class="btn secondary" data-detail="${p.id}">상세보기</button><button class="btn" data-add="${p.id}" ${p.stock===0?'disabled':''}>담기</button></div></article>`}
-const grid=items=>items.length?`<div class="grid">${items.map(card).join('')}</div>`:'<div class="empty">조건에 맞는 젤리가 없어요 🍬</div>';
+const grid=items=>productsLoading?'<div class="empty">상품을 불러오는 중이에요…</div>':productsError?`<div class="empty">${esc(productsError)}</div>`:items.length?`<div class="grid">${items.map(card).join('')}</div>`:'<div class="empty">조건에 맞는 젤리가 없어요 🍬</div>';
 function home(){const slides=[['오늘도 달콤하게!','하루의 기분을 바꾸는 젤리 한 입','./img/banner1.svg'],['새콤한 즐거움','짜릿한 사워 젤리 컬렉션','./img/banner2.svg'],['말랑말랑 구미 타임','귀여운 구미 친구들을 만나보세요','./img/banner3.svg'],['세계의 젤리 여행','다채로운 수입 젤리 한가득','./img/banner4.svg']];return `<section class="hero" aria-label="프로모션 배너">${slides.map((s,i)=>`<div class="slide ${i===slideIndex?'active':''}" aria-hidden="${i!==slideIndex}"><div><span class="chip">rollypolly jelly shop</span><h1>${s[0]}</h1><p>${s[1]}</p><button class="btn" data-view="shop">젤리 구경하기</button></div><img src="${s[2]}" alt="${s[0]} 배너"></div>`).join('')}<div class="dots">${slides.map((_,i)=>`<button data-slide="${i}" class="${i===slideIndex?'active':''}" aria-label="${i+1}번째 배너 보기"></button>`).join('')}</div></section><div class="section-head"><h2>🍓 인기 젤리</h2><button class="ghost" data-view="shop">전체 보기 →</button></div>${grid(products.slice(0,8))}`}
 function shop(){const list=products.filter(p=>(category==='전체'||p.category===category)&&(`${p.name} ${p.description}`.toLowerCase().includes(query.toLowerCase())));return `<h1>🍭 젤리 쇼핑</h1><p class="muted">취향대로 골라보는 달콤한 젤리</p><div class="filters"><input id="search" type="search" placeholder="젤리 이름이나 맛 검색" value="${esc(query)}" aria-label="상품 검색"><select id="category" aria-label="카테고리 선택">${['전체','과일젤리','사워젤리','구미젤리','수입젤리'].map(c=>`<option ${c===category?'selected':''}>${c}</option>`).join('')}</select></div><p class="muted">${list.length}개 상품</p><div id="shopResults">${grid(list)}</div>`}
 function detail(id){const p=products.find(x=>x.id===id);if(!p)return '<p>상품을 찾을 수 없습니다.</p>';return `<button class="ghost" data-view="shop">← 상품 목록</button><section class="detail"><img src="${p.image}" alt="${esc(p.name)} 일러스트"><div><span class="chip">${p.category}</span><h1>${esc(p.name)}</h1><p>${esc(p.description)}</p><h2>${money(p.price)}</h2><p>남은 재고 ${p.stock}개</p><button class="btn" data-add="${p.id}" ${p.stock===0?'disabled':''}>장바구니 담기</button></div></section>`}
@@ -51,4 +66,4 @@ document.addEventListener('click',e=>{const t=e.target.closest('button,[data-vie
 document.addEventListener('input',e=>{if(e.target.id==='search'){query=e.target.value;const filtered=products.filter(p=>(category==='전체'||p.category===category)&&(`${p.name} ${p.description}`.toLowerCase().includes(query.toLowerCase())));const results=document.getElementById('shopResults');if(results)results.innerHTML=grid(filtered);const count=results?.previousElementSibling;if(count)count.textContent=`${filtered.length}개 상품`}});
 document.addEventListener('change',e=>{if(e.target.id==='category'){category=e.target.value;const search=document.getElementById('search');if(search)query=search.value;const filtered=products.filter(p=>(category==='전체'||p.category===category)&&(`${p.name} ${p.description}`.toLowerCase().includes(query.toLowerCase())));document.getElementById('shopResults').innerHTML=grid(filtered);document.getElementById('shopResults').previousElementSibling.textContent=`${filtered.length}개 상품`}});
 document.addEventListener('submit',e=>{if(e.target.id!=='signupForm'&&e.target.id!=='loginForm')return;e.preventDefault();const data=new FormData(e.target),email=String(data.get('email')||'').trim().toLowerCase(),users=read(K.users,[]);if(!email||!e.target.reportValidity())return;let user=users.find(u=>u.email===email);if(e.target.id==='signupForm'){if(user){toast('이미 등록된 이메일입니다.');return}const nickname=String(data.get('nickname')||'').trim();if(!nickname){toast('닉네임을 입력해 주세요.');return}user={id:'u-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),email,nickname,points:3000,spent:0,createdAt:new Date().toISOString()};users.push(user);save(K.users,users);toast('가입 축하! 3,000P가 지급됐어요.')}else if(!user){toast('등록되지 않은 이메일입니다. 회원가입해 주세요.');return}save(K.session,user.id);navigate('mypage')});
-window.addEventListener('storage',()=>render());render();
+window.addEventListener('storage',()=>render());loadProducts();
